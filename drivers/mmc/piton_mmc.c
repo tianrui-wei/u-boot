@@ -35,18 +35,12 @@ struct piton_mmc_plat {
 };
 
 struct piton_mmc_priv {
-	void __iomem *piton_mmc_base_addr; /* peripheral id */
+	void __iomem *base_addr;
 };
 
-/*
- * see mmc_read_blocks to see how it is used.
- * start block is hidden at cmd->arg
- * also, initialize the block size at init
- */
 static int piton_mmc_send_cmd(struct udevice *dev, struct mmc_cmd *cmd,
 							  struct mmc_data *data)
 {
-	/* check first if this is a pure command */
 	if (!data)
 		return 0;
 
@@ -57,22 +51,18 @@ static int piton_mmc_send_cmd(struct udevice *dev, struct mmc_cmd *cmd,
 	buff = (u32 *)data->dest;
 	write_src = (u32 *)data->src;
 	start_block = cmd->cmdarg;
-	start_addr = priv->piton_mmc_base_addr + start_block;
+	start_addr = priv->base_addr + start_block;
 
 	/* if there is a read */
-	if (data->flags & MMC_DATA_READ) {
-		for (byte_cnt = data->blocks * data->blocksize; byte_cnt;
+	for (byte_cnt = data->blocks * data->blocksize; byte_cnt;
 				 byte_cnt -= sizeof(u32)) {
+		if (data->flags & MMC_DATA_READ) {
 			*buff++ = readl(start_addr++);
 		}
-	} else {
-		for (byte_cnt = data->blocks * data->blocksize; byte_cnt;
-				 byte_cnt -= sizeof(u32)) {
+		else if (data->flags & MMC_DATA_WRITE) {
 			writel(*write_src++,start_addr++);
 		}
-
 	}
-
 	return 0;
 }
 
@@ -82,10 +72,9 @@ static int piton_mmc_ofdata_to_platdata(struct udevice *dev)
 	struct piton_mmc_plat *plat = dev_get_plat(dev);
 	struct mmc_config *cfg;
 	struct mmc *mmc;
-	/* fill in device description */
 	struct blk_desc *bdesc;
 
-	priv->piton_mmc_base_addr = (void *)dev_read_addr(dev);
+	priv->base_addr = (void *)dev_read_addr(dev);
 	cfg = &plat->cfg;
 	cfg->name = "PITON MMC";
 	cfg->host_caps = MMC_MODE_8BIT;
@@ -115,20 +104,11 @@ static int piton_mmc_ofdata_to_platdata(struct udevice *dev)
 	return 0;
 }
 
-/* test if the micro sd card is present
- * always return 1, which means present
- */
 static int piton_mmc_getcd(struct udevice *dev)
 {
-	/*
-	 * always return 1
-	 */
 	return 1;
 }
 
-/* dummy function, piton_mmc don't need initialization
- * in hw
- */
 static const struct dm_mmc_ops piton_mmc_ops = {
 	.send_cmd = piton_mmc_send_cmd,
 	.get_cd = piton_mmc_getcd,
